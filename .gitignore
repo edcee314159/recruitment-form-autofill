@@ -9,3 +9,5 @@ attachments/
 *.png
 __pycache__/
 *.py[cod]
+node_modules/
+*.xlsx.inspect.ndjson
