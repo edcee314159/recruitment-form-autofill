@@ -1,4 +1,5 @@
 from dataclasses import asdict
+from datetime import datetime
 import importlib
 import importlib.util
 import json
@@ -69,3 +70,18 @@ class ValidatorTest(WorkbookTestCase):
         workbook.save(self.path)
         workbook.close()
         self.assertTrue({"date_order", "language_pair"}.issubset({i.code for i in self.validate()}))
+
+    def test_accepts_bilingual_aliases_for_one_language_credential(self):
+        self.public(rows=[
+            ["语言能力", "CET-4（大学英语四级）", None, None, "2024-06", None, 550],
+            ["语言能力", "IELTS（雅思）", None, None, "2025-01", None, 6.5],
+        ])
+        self.assertEqual(self.validate(), [])
+
+    def test_detects_duplicates_when_equivalent_dates_use_different_cell_types(self):
+        self.public(rows=[
+            ["语言能力", "IELTS", None, None, datetime(2024, 6, 1), None, 6.5],
+            ["语言能力", "IELTS", None, None, "2024-06-01", None, 6.5],
+        ])
+        issues = self.validate()
+        self.assertIn(("经历清单", 3, "duplicate_identity"), [(i.sheet, i.row, i.code) for i in issues])

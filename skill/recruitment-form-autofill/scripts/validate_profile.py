@@ -63,14 +63,33 @@ def _dates(sheet, row, start, end):
     return issues
 
 
-def _identity(values):
-    return tuple(str(value).strip() if value is not None else "" for value in values)
+def _identity(values, *, date_positions=()):
+    identity = []
+    for position, value in enumerate(values):
+        if position not in date_positions:
+            identity.append(str(value).strip() if value is not None else "")
+            continue
+        if value == "至今":
+            identity.append("至今")
+            continue
+        try:
+            parsed = _date(value)
+        except (ValueError, TypeError):
+            parsed = None
+        identity.append(parsed.isoformat() if parsed else (str(value).strip() if value is not None else ""))
+    return tuple(identity)
 
 
 def _language_valid(name, score):
     if not reader._nonblank(name) or not reader._nonblank(score):
         return False
-    credentials = re.findall(r"CET[- ]?[46]|IELTS|TOEFL|四级|六级|雅思|托福", str(name), re.I)
+    aliases = {
+        "CET-4": r"CET[- ]?4|四级",
+        "CET-6": r"CET[- ]?6|六级",
+        "IELTS": r"IELTS|雅思",
+        "TOEFL": r"TOEFL|托福",
+    }
+    credentials = {credential for credential, pattern in aliases.items() if re.search(pattern, str(name), re.I)}
     if len(credentials) > 1:
         return False
     if credentials:
@@ -144,7 +163,7 @@ def validate_profile(path: Path) -> list[ValidationIssue]:
                     if values[0] not in reader.SUPPORTED_CATEGORIES:
                         issues.append(_issue(sheet_name, row, "unsupported_category"))
                     issues.extend(_dates(sheet_name, row, values[4], values[5]))
-                    identity = _identity((values[0], values[1], values[2], values[4], values[5]))
+                    identity = _identity((values[0], values[1], values[2], values[4], values[5]), date_positions=(3, 4))
                     if identity in seen:
                         issues.append(_issue(sheet_name, row, "duplicate_identity"))
                     seen.add(identity)
