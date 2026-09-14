@@ -115,7 +115,7 @@ function addExperienceList(sheet, rows) {
   sheet.getRange("H2:H501").format.wrapText = true;
   addCategoryValidation(sheet);
   sheet.freezePanes.freezeRows(1);
-  setWidths(sheet, [16, 28, 18, 16, 16, 16, 18, 52, 28]);
+  setWidths(sheet, [16, 28, 32, 16, 16, 16, 18, 52, 28]);
 }
 
 function addAttachmentList(sheet, rows) {

@@ -1,4 +1,6 @@
 from pathlib import Path
+import os
+import shutil
 import subprocess
 import unittest
 
@@ -6,13 +8,6 @@ from openpyxl import load_workbook
 
 
 ROOT = Path(__file__).resolve().parents[1]
-NODE = (
-    Path(r"C:\Users\lenovo\.cache\codex-runtimes\codex-primary-runtime")
-    / "dependencies"
-    / "node"
-    / "bin"
-    / "node.exe"
-)
 TEMPLATE = ROOT / "templates" / "秋招个人资料库模板.xlsx"
 EXAMPLE = ROOT / "examples" / "示例资料库.xlsx"
 
@@ -29,6 +24,28 @@ EXPERIENCE_CATEGORIES = [
     "教育经历", "实习经历", "工作经历", "项目经历", "语言能力", "专业证书",
     "竞赛获奖", "荣誉称号", "校园活动", "科研成果",
 ]
+
+
+def find_node_executable():
+    override = os.environ.get("CODEX_NODE")
+    if override:
+        executable = Path(override).expanduser()
+        if executable.is_file():
+            return str(executable)
+        raise RuntimeError(
+            f"CODEX_NODE points to a missing Node.js executable: {executable}"
+        )
+
+    executable = shutil.which("node")
+    if executable:
+        return executable
+    raise RuntimeError(
+        "Node.js was not found. Install Node.js and add 'node' to PATH, "
+        "or set CODEX_NODE to the Node.js executable path."
+    )
+
+
+NODE = find_node_executable()
 
 
 class TemplateWorkbookTest(unittest.TestCase):
@@ -52,6 +69,9 @@ class TemplateWorkbookTest(unittest.TestCase):
         )
         self.assertEqual(
             [cell.value for cell in workbook["附件清单"][1]], ATTACHMENT_HEADERS
+        )
+        self.assertTrue(
+            all(cell.value is None for cell in workbook["个人资料"][2])
         )
         self.assertTrue(
             all(
@@ -107,3 +127,15 @@ class TemplateWorkbookTest(unittest.TestCase):
         self.assertEqual(
             category_validation.formula1.strip('"').split(","), EXPERIENCE_CATEGORIES
         )
+
+    def test_example_experience_role_column_fits_the_program_name(self):
+        """Catches a narrow role column that clips the example program name."""
+        subprocess.run(
+            [NODE, "scripts/create_template.mjs"],
+            cwd=ROOT,
+            check=True,
+        )
+
+        workbook = load_workbook(EXAMPLE)
+        role_column = workbook["经历清单"].column_dimensions["C"]
+        self.assertGreaterEqual(role_column.width, 30)
