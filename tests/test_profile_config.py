@@ -123,6 +123,96 @@ class ProfileConfigTest(unittest.TestCase):
             )
             self.assertTrue(config.is_file())
 
+    def test_init_profile_rejects_workbook_inside_repository_with_external_config(self):
+        """Catches initialization that puts a local workbook in the public repository."""
+        profile_config = profile_config_module()
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary = Path(temporary_directory)
+            repository_root = temporary / "public-repository"
+            repository_root.mkdir()
+            template = temporary / "blank-template.xlsx"
+            template.write_bytes(b"synthetic blank workbook")
+            config = temporary / "local-settings" / "profile.json"
+
+            with self.assertRaises(profile_config.ProfileConfigError):
+                profile_config.init_profile(
+                    repository_root / "profile.xlsx",
+                    None,
+                    config,
+                    template_path=template,
+                    repository_root=repository_root,
+                )
+
+            self.assertFalse(config.exists())
+
+    def test_init_profile_rejects_attachment_inside_repository_with_external_config(self):
+        """Catches initialization that puts a local attachment folder in the public repository."""
+        profile_config = profile_config_module()
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary = Path(temporary_directory)
+            repository_root = temporary / "public-repository"
+            repository_root.mkdir()
+            template = temporary / "blank-template.xlsx"
+            template.write_bytes(b"synthetic blank workbook")
+            workbook = temporary / "candidate" / "profile.xlsx"
+            config = temporary / "local-settings" / "profile.json"
+
+            with self.assertRaises(profile_config.ProfileConfigError):
+                profile_config.init_profile(
+                    workbook,
+                    repository_root / "attachments",
+                    config,
+                    template_path=template,
+                    repository_root=repository_root,
+                )
+
+            self.assertFalse(config.exists())
+
+    def test_load_config_rejects_workbook_inside_repository_with_external_config(self):
+        """Catches loading of external config that points its workbook into the repository."""
+        profile_config = profile_config_module()
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary = Path(temporary_directory)
+            repository_root = temporary / "public-repository"
+            repository_root.mkdir()
+            workbook = repository_root / "profile.xlsx"
+            workbook.write_bytes(b"synthetic workbook")
+            config = temporary / "local-settings" / "profile.json"
+            config.parent.mkdir()
+            config.write_text(
+                json.dumps({"workbook_path": str(workbook), "attachment_dir": None}),
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(profile_config.ProfileConfigError):
+                profile_config.load_config(config, repository_root=repository_root)
+
+    def test_load_config_rejects_attachment_inside_repository_with_external_config(self):
+        """Catches loading of external config that points attachments into the repository."""
+        profile_config = profile_config_module()
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            temporary = Path(temporary_directory)
+            repository_root = temporary / "public-repository"
+            repository_root.mkdir()
+            workbook = temporary / "candidate" / "profile.xlsx"
+            workbook.parent.mkdir()
+            workbook.write_bytes(b"synthetic workbook")
+            attachment_directory = repository_root / "attachments"
+            config = temporary / "local-settings" / "profile.json"
+            config.parent.mkdir()
+            config.write_text(
+                json.dumps(
+                    {
+                        "workbook_path": str(workbook),
+                        "attachment_dir": str(attachment_directory),
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(profile_config.ProfileConfigError):
+                profile_config.load_config(config, repository_root=repository_root)
+
     def test_profile_config_is_immutable_and_normalizes_paths(self):
         """Catches mutable or unnormalized paths that make persisted config ambiguous."""
         profile_config = profile_config_module()

@@ -53,6 +53,20 @@ def _validate_config_location(
     return resolved_config
 
 
+def _validate_profile_location(
+    path: Path,
+    label: str,
+    *,
+    repository_root: Path | str = REPOSITORY_ROOT,
+) -> Path:
+    resolved_root = _resolved(repository_root)
+    try:
+        path.relative_to(resolved_root)
+    except ValueError:
+        return path
+    raise ProfileConfigError(f"{label} must not be stored in the repository")
+
+
 def write_config(
     profile: ProfileConfig,
     config_path: Path | str,
@@ -99,6 +113,13 @@ def load_config(
         )
     except (OSError, TypeError, ValueError, KeyError, json.JSONDecodeError) as exc:
         raise ProfileConfigError("configuration could not be read") from exc
+    _validate_profile_location(
+        profile.workbook_path, "workbook", repository_root=repository_root
+    )
+    if profile.attachment_dir is not None:
+        _validate_profile_location(
+            profile.attachment_dir, "attachment directory", repository_root=repository_root
+        )
     if not profile.workbook_path.is_file():
         raise ProfileConfigError("workbook not found")
     return profile
@@ -122,6 +143,11 @@ def init_profile(
     workbook = _resolved(workbook_path)
     attachments = _resolved(attachment_dir) if attachment_dir is not None else None
     template = _resolved(template_path)
+    _validate_profile_location(workbook, "workbook", repository_root=repository_root)
+    if attachments is not None:
+        _validate_profile_location(
+            attachments, "attachment directory", repository_root=repository_root
+        )
 
     if workbook.exists():
         if not workbook.is_file():
