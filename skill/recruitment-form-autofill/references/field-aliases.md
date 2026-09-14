@@ -1,6 +1,6 @@
 # Field aliases and semantic decisions
 
-Use the label, surrounding section, units, help text, and available options together. Label similarity alone is insufficient. Aliases identify candidates, not interchangeable facts. Read record status, hints and notes; ask about contradictions or unclear applicability.
+Use the label, surrounding section, units, help text, and available options together. Label similarity alone is insufficient. Aliases identify candidates, not interchangeable facts. Read only the records requested from the user-maintained local profile; ask about contradictions or unclear applicability.
 
 | Excel meaning | Common website labels/options | Safe action |
 |---|---|---|

@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import argparse
+from dataclasses import asdict
 from dataclasses import dataclass
 from datetime import date, datetime
+import json
+import os
 from pathlib import Path
 import re
+import sys
 
 import read_profile as reader
+from profile_config import ProfileConfigError, load_config
 
 
 @dataclass(frozen=True)
@@ -124,7 +130,8 @@ def validate_profile(path: Path) -> list[ValidationIssue]:
                 continue
             sheet = workbook[sheet_name]
             actual = tuple(sheet.cell(header_row, col).value for col in range(1, len(headers) + 1))
-            trailing = [sheet.cell(header_row, col).value for col in range(len(headers) + 1, sheet.max_column + 1)]
+            max_column = sheet.max_column or len(headers)
+            trailing = [sheet.cell(header_row, col).value for col in range(len(headers) + 1, max_column + 1)]
             if actual != headers or any(reader._nonblank(v) for v in trailing):
                 issues.append(_issue(sheet_name, header_row, "headers"))
                 continue
@@ -174,3 +181,34 @@ def validate_profile(path: Path) -> list[ValidationIssue]:
         return [_issue("", 0, "workbook")]
     finally:
         workbook.close()
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Validate a local recruitment profile workbook.")
+    paths = parser.add_mutually_exclusive_group()
+    paths.add_argument("--config", type=Path, metavar="PATH")
+    paths.add_argument("--database", type=Path, metavar="PATH", help="Explicit workbook override for legacy use and testing.")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    try:
+        database = args.database
+        if database is None:
+            config_path = args.config or os.environ.get("RECRUITMENT_PROFILE_CONFIG")
+            if not config_path:
+                raise ProfileConfigError("local configuration required; use --config")
+            database = load_config(config_path).workbook_path
+        issues = validate_profile(database)
+    except ProfileConfigError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps({"issues": [asdict(issue) for issue in issues]}, ensure_ascii=False))
+    return 0 if not issues else 1
+
+
+if __name__ == "__main__":
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+    raise SystemExit(main())
