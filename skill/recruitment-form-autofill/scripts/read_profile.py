@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import zipfile
 from datetime import date, datetime
@@ -15,7 +16,20 @@ import openpyxl
 from openpyxl.utils.exceptions import InvalidFileException
 
 
-DEFAULT_DATABASE = Path(r"D:\Codex\autumn-recruitment\personal-info-summary\秋招个人信息总表.xlsx")
+from profile_config import ProfileConfigError, load_config
+
+PERSONAL_SHEET = "个人资料"
+PUBLIC_EXPERIENCE_SHEET = "经历清单"
+ATTACHMENT_SHEET = "附件清单"
+PERSONAL_HEADERS = (
+    "姓名", "手机号码", "邮箱", "出生日期", "籍贯", "现居城市", "学校名称", "专业名称",
+    "学历", "学位", "入学时间", "预计毕业时间", "期望岗位方向", "期望工作城市",
+)
+ATTACHMENT_HEADERS = ("文件类型", "本地文件路径", "说明")
+SUPPORTED_CATEGORIES = (
+    "教育经历", "实习经历", "工作经历", "项目经历", "语言能力", "专业证书",
+    "竞赛获奖", "荣誉称号", "校园活动", "科研成果",
+)
 GENERAL_SHEET = "资料总表"
 EXPERIENCE_SHEET = "经历与成果"
 GENERAL_HEADERS = (
@@ -31,6 +45,8 @@ EXPERIENCE_HEADERS = (
 EXPERIENCE_KEYS = (
     "category", "organization", "role", "location", "start", "end", "result", "details", "source", "note"
 )
+PUBLIC_EXPERIENCE_HEADERS = EXPERIENCE_HEADERS[:8] + ("备注",)
+PUBLIC_EXPERIENCE_KEYS = EXPERIENCE_KEYS[:8] + ("note",)
 
 
 class ProfileError(Exception):
@@ -59,6 +75,7 @@ def _rows_from_sheet(
 
 
 def _open_workbook(path: Path):
+    path = Path(path)
     if not path.is_file():
         raise ProfileError("database not found")
     try:
@@ -98,26 +115,63 @@ def _rows_from_workbook(
         raise ProfileError("database could not be read") from exc
 
 
+def _detect_workbook_schema(workbook) -> str:
+    if PERSONAL_SHEET in workbook.sheetnames:
+        return "public"
+    if GENERAL_SHEET in workbook.sheetnames:
+        return "legacy"
+    raise SchemaError("unsupported workbook schema")
+
+
+def detect_schema(path: Path) -> str:
+    """Identify a supported workbook layout without exposing any values."""
+    workbook = _open_workbook(path)
+    try:
+        return _detect_workbook_schema(workbook)
+    finally:
+        workbook.close()
+
+
+def _general_from_workbook(workbook):
+    if _detect_workbook_schema(workbook) == "legacy":
+        return _rows_from_workbook(workbook, GENERAL_SHEET, 8, GENERAL_HEADERS, GENERAL_KEYS)
+    _rows_from_workbook(workbook, PERSONAL_SHEET, 1, PERSONAL_HEADERS, PERSONAL_HEADERS)
+    sheet = workbook[PERSONAL_SHEET]
+    return [dict(zip(GENERAL_KEYS, (index, PERSONAL_SHEET, field, sheet.cell(2, index).value, None, None, None, None, None)))
+            for index, field in enumerate(PERSONAL_HEADERS, 1)]
+
+
+def _experiences_from_workbook(workbook):
+    if _detect_workbook_schema(workbook) == "legacy":
+        return _rows_from_workbook(workbook, EXPERIENCE_SHEET, 6, EXPERIENCE_HEADERS, EXPERIENCE_KEYS)
+    records = _rows_from_workbook(workbook, PUBLIC_EXPERIENCE_SHEET, 1, PUBLIC_EXPERIENCE_HEADERS, PUBLIC_EXPERIENCE_KEYS)
+    return [dict(record, source=None) for record in records]
+
+
 def load_general_profile(path: Path) -> list[dict[str, object]]:
-    """Load general-profile rows using the fixed 资料总表 schema."""
-    return _rows_from_sheet(path, GENERAL_SHEET, 8, GENERAL_HEADERS, GENERAL_KEYS)
+    """Load public row 2 or legacy field rows into the existing record shape."""
+    workbook = _open_workbook(path)
+    try:
+        return _general_from_workbook(workbook)
+    finally:
+        workbook.close()
 
 
 def load_experience_records(path: Path) -> list[dict[str, object]]:
     """Load experience rows using the fixed 经历与成果 schema."""
-    return _rows_from_sheet(path, EXPERIENCE_SHEET, 6, EXPERIENCE_HEADERS, EXPERIENCE_KEYS)
+    workbook = _open_workbook(path)
+    try:
+        return _experiences_from_workbook(workbook)
+    finally:
+        workbook.close()
 
 
 def load_inventory(path: Path) -> dict[str, list[object]]:
     """List profile labels using one workbook open and without returning values."""
     workbook = _open_workbook(path)
     try:
-        general = _rows_from_workbook(
-            workbook, GENERAL_SHEET, 8, GENERAL_HEADERS, GENERAL_KEYS
-        )
-        experiences = _rows_from_workbook(
-            workbook, EXPERIENCE_SHEET, 6, EXPERIENCE_HEADERS, EXPERIENCE_KEYS
-        )
+        general = _general_from_workbook(workbook)
+        experiences = _experiences_from_workbook(workbook)
     finally:
         workbook.close()
     return _inventory(general, experiences)
@@ -131,12 +185,8 @@ def load_bundle(
     """Read requested records from both sheets using one workbook open."""
     workbook = _open_workbook(path)
     try:
-        general = _rows_from_workbook(
-            workbook, GENERAL_SHEET, 8, GENERAL_HEADERS, GENERAL_KEYS
-        )
-        experiences = _rows_from_workbook(
-            workbook, EXPERIENCE_SHEET, 6, EXPERIENCE_HEADERS, EXPERIENCE_KEYS
-        )
+        general = _general_from_workbook(workbook)
+        experiences = _experiences_from_workbook(workbook)
     finally:
         workbook.close()
 
@@ -184,7 +234,9 @@ def _inventory(general: Iterable[dict[str, object]], experiences: Iterable[dict[
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Read the approved recruitment profile workbook.")
-    parser.add_argument("--database", type=Path, default=DEFAULT_DATABASE, metavar="PATH")
+    paths = parser.add_mutually_exclusive_group()
+    paths.add_argument("--config", type=Path, metavar="PATH")
+    paths.add_argument("--database", type=Path, metavar="PATH", help="Explicit workbook override for legacy use and testing.")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("inventory", help="List profile field and category names only.")
     get_parser = commands.add_parser("get", help="Read explicitly requested general fields.")
@@ -200,6 +252,11 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
+        if args.database is None:
+            config_path = args.config or os.environ.get("RECRUITMENT_PROFILE_CONFIG")
+            if not config_path:
+                raise ProfileError("local configuration required; use --config")
+            args.database = load_config(config_path).workbook_path
         if args.command == "inventory":
             _write_json(load_inventory(args.database))
             return 0
@@ -232,7 +289,7 @@ def main(argv: list[str] | None = None) -> int:
             raise ProfileError("requested experience category not found")
         _write_json({"records": selected})
         return 0
-    except ProfileError as exc:
+    except (ProfileError, ProfileConfigError) as exc:
         return _error(str(exc), 2)
 
 
