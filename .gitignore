@@ -1,0 +1,11 @@
+*.personal.xlsx
+profile-config.json
+local-profile/
+attachments/
+*.docx
+*.pdf
+*.jpg
+*.jpeg
+*.png
+__pycache__/
+*.py[cod]

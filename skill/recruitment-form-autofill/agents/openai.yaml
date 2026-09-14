@@ -1,0 +1,6 @@
+interface:
+  display_name: "招聘网站资料填写"
+  short_description: "从个人 Excel 资料库填写招聘与校招网页"
+  default_prompt: "Use $recruitment-form-autofill to fill this recruitment form from my personal Excel database, but do not save or submit it."
+policy:
+  allow_implicit_invocation: true
