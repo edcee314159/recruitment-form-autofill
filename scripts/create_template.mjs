@@ -60,12 +60,16 @@ function addCategoryValidation(sheet) {
   };
 }
 
-function addGuidance(sheet) {
+function addGuidance(sheet, profileKind) {
   setSheetDefaults(sheet);
   sheet.tabColor = "#7F8C8D";
   sheet.getRange("A1").values = [["秋招个人资料库使用说明"]];
   sheet.getRange("A1").format = {
     font: { name: "Aptos", size: 14, bold: true, color: "#1F1F1F" },
+  };
+  sheet.getRange("A2").values = [[`资料类型：${profileKind}`]];
+  sheet.getRange("A2").format = {
+    font: { name: "Aptos", size: 10, italic: true, color: "#595959" },
   };
   sheet.getRange("A3:B8").values = [
     ["步骤", "说明"],
@@ -131,14 +135,14 @@ function addAttachmentList(sheet, rows) {
   setWidths(sheet, [18, 48, 40]);
 }
 
-function createWorkbook({ personalValues, experienceRows, attachmentRows }) {
+function createWorkbook({ personalValues, experienceRows, attachmentRows, profileKind }) {
   const workbook = Workbook.create();
   const guidance = workbook.worksheets.add("使用说明");
   const personal = workbook.worksheets.add("个人资料");
   const experience = workbook.worksheets.add("经历清单");
   const attachments = workbook.worksheets.add("附件清单");
 
-  addGuidance(guidance);
+  addGuidance(guidance, profileKind);
   addPersonalProfile(personal, personalValues);
   addExperienceList(experience, experienceRows);
   addAttachmentList(attachments, attachmentRows);
@@ -173,7 +177,7 @@ const fictionalAttachmentRows = [
 ];
 
 await saveWorkbook(
-  createWorkbook({ personalValues: blankValues, experienceRows: [], attachmentRows: [] }),
+  createWorkbook({ personalValues: blankValues, experienceRows: [], attachmentRows: [], profileKind: "空白模板" }),
   outputPaths.template,
 );
 await saveWorkbook(
@@ -181,6 +185,7 @@ await saveWorkbook(
     personalValues: fictionalPersonalValues,
     experienceRows: fictionalExperienceRows,
     attachmentRows: fictionalAttachmentRows,
+    profileKind: "虚构示例",
   }),
   outputPaths.example,
 );
