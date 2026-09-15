@@ -4,9 +4,16 @@ import { fileURLToPath } from "node:url";
 import { SpreadsheetFile, Workbook } from "@oai/artifact-tool";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const outputDirectoryFlag = process.argv.indexOf("--output-dir");
+if (outputDirectoryFlag !== -1 && !process.argv[outputDirectoryFlag + 1]) {
+  throw new Error("--output-dir requires a directory path");
+}
+const outputRoot = outputDirectoryFlag === -1
+  ? rootDir
+  : path.resolve(process.argv[outputDirectoryFlag + 1]);
 const outputPaths = {
-  template: path.join(rootDir, "templates", "秋招个人资料库模板.xlsx"),
-  example: path.join(rootDir, "examples", "示例资料库.xlsx"),
+  template: path.join(outputRoot, "templates", "秋招个人资料库模板.xlsx"),
+  example: path.join(outputRoot, "examples", "示例资料库.xlsx"),
 };
 
 const personalHeaders = [

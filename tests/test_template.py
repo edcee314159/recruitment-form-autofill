@@ -2,6 +2,7 @@ from pathlib import Path
 import os
 import shutil
 import subprocess
+import tempfile
 import unittest
 
 from openpyxl import load_workbook
@@ -49,15 +50,25 @@ NODE = find_node_executable()
 
 
 class TemplateWorkbookTest(unittest.TestCase):
-    def test_generator_creates_blank_template_with_required_structure(self):
-        """Catches a generator that omits required sheets, headers, or blank rows."""
+    def generate(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        output_root = Path(temporary.name)
         subprocess.run(
-            [str(NODE), "scripts/create_template.mjs"],
+            [str(NODE), "scripts/create_template.mjs", "--output-dir", str(output_root)],
             cwd=ROOT,
             check=True,
         )
+        return (
+            output_root / "templates" / "秋招个人资料库模板.xlsx",
+            output_root / "examples" / "示例资料库.xlsx",
+        )
 
-        workbook = load_workbook(TEMPLATE)
+    def test_generator_creates_blank_template_with_required_structure(self):
+        """Catches a generator that omits required sheets, headers, or blank rows."""
+        template, _ = self.generate()
+
+        workbook = load_workbook(template)
         self.assertEqual(workbook.sheetnames, ["使用说明", "个人资料", "经历清单", "附件清单"])
         self.assertEqual(workbook["个人资料"]["A1"].value, "姓名")
         self.assertEqual(workbook["经历清单"]["A1"].value, "类别")
@@ -88,13 +99,9 @@ class TemplateWorkbookTest(unittest.TestCase):
 
     def test_generator_creates_fictional_example_with_language_records(self):
         """Catches an example that loses the required separate language rows."""
-        subprocess.run(
-            [str(NODE), "scripts/create_template.mjs"],
-            cwd=ROOT,
-            check=True,
-        )
+        _, example = self.generate()
 
-        workbook = load_workbook(EXAMPLE)
+        workbook = load_workbook(example)
         experience_sheet = workbook["经历清单"]
         categories = [
             row[0].value for row in experience_sheet.iter_rows(min_row=2, values_only=False)
@@ -110,13 +117,9 @@ class TemplateWorkbookTest(unittest.TestCase):
 
     def test_template_limits_experience_categories_to_the_published_list(self):
         """Catches a template that leaves experience categories unconstrained."""
-        subprocess.run(
-            [str(NODE), "scripts/create_template.mjs"],
-            cwd=ROOT,
-            check=True,
-        )
+        template, _ = self.generate()
 
-        workbook = load_workbook(TEMPLATE)
+        workbook = load_workbook(template)
         validations = workbook["经历清单"].data_validations.dataValidation
         category_validation = next(
             validation
@@ -130,12 +133,8 @@ class TemplateWorkbookTest(unittest.TestCase):
 
     def test_example_experience_role_column_fits_the_program_name(self):
         """Catches a narrow role column that clips the example program name."""
-        subprocess.run(
-            [NODE, "scripts/create_template.mjs"],
-            cwd=ROOT,
-            check=True,
-        )
+        _, example = self.generate()
 
-        workbook = load_workbook(EXAMPLE)
+        workbook = load_workbook(example)
         role_column = workbook["经历清单"].column_dimensions["C"]
         self.assertGreaterEqual(role_column.width, 30)
