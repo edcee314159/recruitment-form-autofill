@@ -95,14 +95,14 @@ def _rows_from_workbook(
         if sheet_name not in workbook.sheetnames:
             raise ProfileError(f"required sheet missing: {sheet_name}")
         sheet = workbook[sheet_name]
-        actual_headers = tuple(
-            sheet.cell(row=header_row, column=column).value
-            for column in range(1, len(headers) + 1)
+        # Some valid exporters omit worksheet dimensions. Streaming the complete
+        # header also checks extra columns without relying on max_column.
+        header_values = next(
+            sheet.iter_rows(min_row=header_row, max_row=header_row, values_only=True),
+            (),
         )
-        trailing_headers = tuple(
-            sheet.cell(row=header_row, column=column).value
-            for column in range(len(headers) + 1, sheet.max_column + 1)
-        )
+        actual_headers = tuple(header_values[:len(headers)])
+        trailing_headers = header_values[len(headers):]
         if actual_headers != headers or any(value is not None for value in trailing_headers):
             raise SchemaError(f"unexpected headers in sheet: {sheet_name}")
         records: list[dict[str, object]] = []

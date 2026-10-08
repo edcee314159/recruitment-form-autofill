@@ -1,0 +1,1 @@
+-r skill/recruitment-form-autofill/requirements.txt

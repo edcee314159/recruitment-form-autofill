@@ -1,5 +1,8 @@
 import importlib
 import importlib.util
+import json
+import subprocess
+import sys
 from openpyxl import load_workbook
 
 from tests.profile_fixtures import WorkbookTestCase, ROOT
@@ -7,6 +10,25 @@ import read_profile
 
 
 class MigrationTest(WorkbookTestCase):
+    def test_documented_cli_migrates_records_and_reports_redacted_warnings(self):
+        self.legacy()
+        original = self.path.read_bytes()
+        destination = self.directory / "cli-result.xlsx"
+        result = subprocess.run([sys.executable, "-B", str(ROOT / "skill/recruitment-form-autofill/scripts/migrate_profile.py"), "--source", str(self.path), "--destination", str(destination)], capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(destination.is_file(), "CLI must create the migrated workbook")
+        self.assertEqual(self.path.read_bytes(), original)
+        self.assertEqual(read_profile.load_general_profile(destination)[0]["value"], "测试候选人（虚构）")
+        self.assertEqual(json.loads(result.stdout)["warnings"][0]["code"], "unmapped_field")
+        self.assertNotIn("虚构保留内容", result.stdout)
+
+    def test_cli_rejects_missing_source_instead_of_succeeding_silently(self):
+        destination = self.directory / "cli-result.xlsx"
+        result = subprocess.run([sys.executable, "-B", str(ROOT / "skill/recruitment-form-autofill/scripts/migrate_profile.py"), "--source", str(self.directory / "PRIVATE-MISSING.xlsx"), "--destination", str(destination)], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 2)
+        self.assertFalse(destination.exists())
+        self.assertNotIn("PRIVATE-MISSING", result.stderr)
+
     def migration(self):
         self.assertIsNotNone(importlib.util.find_spec("migrate_profile"), "migration must exist")
         return importlib.import_module("migrate_profile")

@@ -8,8 +8,17 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
-BLANK_TEMPLATE = REPOSITORY_ROOT / "templates" / "秋招个人资料库模板.xlsx"
+SKILL_ROOT = Path(__file__).resolve().parents[1]
+CHECKOUT_ROOT = SKILL_ROOT.parent.parent
+# A skill-only install has no surrounding checkout. Its privacy boundary is
+# the installed skill folder, not the user's entire .codex directory.
+REPOSITORY_ROOT = (
+    CHECKOUT_ROOT
+    if SKILL_ROOT.parent.name == "skill"
+    and (CHECKOUT_ROOT / "scripts" / "prepublish_check.py").is_file()
+    else SKILL_ROOT
+)
+BLANK_TEMPLATE = SKILL_ROOT / "assets" / "秋招个人资料库模板.xlsx"
 
 
 class ProfileConfigError(Exception):

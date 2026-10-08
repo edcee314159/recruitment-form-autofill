@@ -15,10 +15,15 @@ All actions above remain subject to SKILL.md authorization gates and profile-use
 ## Repeatable sections / record splitting
 
 When a form exposes an “添加/增加” control, treat the section as a list. Count
-only clearly separate records in the Excel database, reuse the first visible
-block, and add exactly `N-1` blocks for `N` records. Re-read the page after each
-addition and verify one-to-one record mapping; do not duplicate blocks already
-representing a record.
+only clearly separate records in the Excel database. First match and preserve
+existing blocks already representing those records, then assign unmatched
+records to unused blank blocks. Add only the remaining shortage:
+`max(0, N - M - B)`, where N is the record count, M is the number of uniquely
+matched records, and B is the number of reusable blank blocks. With no blocks,
+add one for every record; when all records already match, add none. Re-read the
+page after each addition and verify one-to-one mapping. Treat ambiguous or
+conflicting nonempty blocks as unresolved, not blank; ask before overwriting or
+deleting them. Do not invent records to fill surplus blank blocks.
 
 | Excel records | Website section | Mapping rule |
 |---|---|---|

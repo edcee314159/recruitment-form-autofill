@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import argparse
+from dataclasses import asdict
 from io import BytesIO
+import json
 from pathlib import Path
+import sys
 
 import openpyxl
 
@@ -71,3 +75,23 @@ def migrate_legacy(source: Path, destination: Path) -> list[ValidationIssue]:
         workbook.close()
         if output is not None:
             output.close()
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Migrate a legacy recruitment workbook to a new local workbook.")
+    parser.add_argument("--source", type=Path, required=True)
+    parser.add_argument("--destination", type=Path, required=True)
+    args = parser.parse_args(argv)
+    try:
+        warnings = migrate_legacy(args.source, args.destination)
+    except reader.ProfileError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    print(json.dumps({"warnings": [asdict(issue) for issue in warnings]}, ensure_ascii=False))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+    raise SystemExit(main())

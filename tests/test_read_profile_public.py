@@ -4,11 +4,18 @@ import json
 import os
 from unittest.mock import patch
 
-from tests.profile_fixtures import WorkbookTestCase
+from tests.profile_fixtures import WorkbookTestCase, ROOT
 import read_profile
 
 
 class PublicReaderTest(WorkbookTestCase):
+    def test_published_workbooks_can_be_read_without_dimension_metadata(self):
+        for path in (ROOT / "templates" / "秋招个人资料库模板.xlsx", ROOT / "examples" / "示例资料库.xlsx"):
+            with self.subTest(path=path.name):
+                self.assertIn("姓名", read_profile.load_inventory(path)["fields"])
+        records = read_profile.load_bundle(ROOT / "examples" / "示例资料库.xlsx", ["姓名"], ["语言能力"])
+        self.assertEqual([r["organization"] for r in records["experiences"]], ["CET-4", "CET-6", "IELTS"])
+
     def setUp(self):
         super().setUp()
         guard = patch.object(read_profile, "DEFAULT_DATABASE", self.directory / "unused.xlsx", create=True)
